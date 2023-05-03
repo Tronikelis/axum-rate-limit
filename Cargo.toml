@@ -1,0 +1,13 @@
+[package]
+name = "tronikel-axum-rate-limit"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+async-trait = "0.1.68"
+axum = "0.6.18"
+axum-client-ip = "0.4.1"
+redis = {version = "0.23.0", features = ["tokio-native-tls-comp"]}
+tokio = { version = "1.28.0", features = ["full"] }
