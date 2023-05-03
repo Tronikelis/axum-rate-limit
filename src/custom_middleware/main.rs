@@ -1,5 +1,3 @@
-#![allow(clippy::needless_return)]
-
 use std::{collections::HashMap, sync::Arc};
 
 use tokio::sync::RwLock;
