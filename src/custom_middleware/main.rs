@@ -13,6 +13,7 @@ use super::stores::Store;
 #[derive(Clone)]
 pub struct Options {
     pub max: usize,
+    pub per_min: usize,
 }
 
 type ShareableState<T> = Arc<RwLock<T>>;
@@ -41,27 +42,38 @@ where
         req: Request<B>,
         next: Next<B>,
     ) -> Response {
+        let mut latest: usize = 0;
+
         {
             let ip = ip_addr.to_string();
 
             let current: usize = {
-                let store = state.store.read().await;
+                let mut store = state.store.write().await;
                 store.get(&ip).await.unwrap().unwrap_or(0)
             };
 
-            let latest = current + 1;
+            latest = current + 1;
 
             state.store.write().await.update(&ip, latest).await.unwrap();
 
             if latest > state.options.max {
                 return (
                     StatusCode::TOO_MANY_REQUESTS,
-                    format!("{} max requests per minute", state.options.max),
+                    format!(
+                        "{} max requests per {}",
+                        state.options.max, state.options.per_min
+                    ),
                 )
                     .into_response();
             }
         }
 
-        return next.run(req).await;
+        let mut response = next.run(req).await;
+
+        let headers_mut = response.headers_mut();
+        headers_mut.insert("x-rate-limit-current", latest.into());
+        headers_mut.insert("x-rate-limit-max", state.options.max.into());
+
+        return response;
     }
 }

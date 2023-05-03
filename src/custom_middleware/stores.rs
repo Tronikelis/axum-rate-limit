@@ -1,6 +1,8 @@
 use async_trait::async_trait;
 use redis::{aio::Connection, AsyncCommands, Client};
-use std::collections::HashMap;
+use std::{collections::HashMap, thread::current, time};
+
+use super::main::Options;
 
 #[derive(Debug)]
 pub struct StoreError {
@@ -12,19 +14,20 @@ pub trait Store
 where
     Self: Clone,
 {
-    async fn get(&self, key: &str) -> Result<Option<usize>, StoreError>;
+    async fn get(&mut self, key: &str) -> Result<Option<usize>, StoreError>;
     async fn update(&mut self, key: &str, value: usize) -> Result<(), StoreError>;
     async fn del(&mut self, key: &str) -> Result<(), StoreError>;
 }
 
 #[derive(Clone)]
 pub struct RedisStore {
-    pub client: Client,
+    client: Client,
+    options: Options,
 }
 
 impl RedisStore {
-    pub fn new(client: Client) -> Self {
-        return Self { client };
+    pub fn new(client: Client, options: Options) -> Self {
+        return Self { client, options };
     }
 
     async fn get_async_connection(&self) -> Result<Connection, StoreError> {
@@ -40,7 +43,7 @@ impl RedisStore {
 
 #[async_trait]
 impl Store for RedisStore {
-    async fn get(&self, key: &str) -> Result<Option<usize>, StoreError> {
+    async fn get(&mut self, key: &str) -> Result<Option<usize>, StoreError> {
         let mut connection = self.get_async_connection().await?;
 
         let value = connection.get(key).await.map_err(|_err| StoreError {
@@ -60,7 +63,7 @@ impl Store for RedisStore {
                 })?;
 
         connection
-            .set(key, value)
+            .set_ex(key, value, self.options.per_min * 60)
             .await
             .map_err(|_err| StoreError {
                 msg: "yo".to_string(),
@@ -87,22 +90,47 @@ impl Store for RedisStore {
 }
 
 #[derive(Clone)]
+struct MemoryValue {
+    value: usize,
+    updated_at: usize,
+}
+
+#[derive(Clone)]
 pub struct MemoryStore {
-    pub hash_map: HashMap<String, usize>,
+    hash_map: HashMap<String, MemoryValue>,
+    options: Options,
 }
 
 impl MemoryStore {
-    pub fn new() -> Self {
+    pub fn new(options: Options) -> Self {
         return Self {
             hash_map: HashMap::new(),
+            options,
         };
     }
 }
 
 #[async_trait]
 impl Store for MemoryStore {
-    async fn get(&self, key: &str) -> Result<Option<usize>, StoreError> {
-        return Ok(self.hash_map.get(key).copied());
+    async fn get(&mut self, key: &str) -> Result<Option<usize>, StoreError> {
+        let current_unix = time::SystemTime::now()
+            .duration_since(time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let got = self.hash_map.get(key);
+
+        return match got {
+            Some(got) => {
+                if got.updated_at + (self.options.per_min * 60) < current_unix.try_into().unwrap() {
+                    self.del(key).await?;
+                    Ok(None)
+                } else {
+                    Ok(Some(got.value))
+                }
+            }
+            None => Ok(None),
+        };
     }
 
     async fn del(&mut self, key: &str) -> Result<(), StoreError> {
@@ -111,7 +139,30 @@ impl Store for MemoryStore {
     }
 
     async fn update(&mut self, key: &str, value: usize) -> Result<(), StoreError> {
-        self.hash_map.insert(key.to_string(), value);
+        let current_unix = time::SystemTime::now()
+            .duration_since(time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let current = self.hash_map.get(key);
+
+        match current {
+            Some(current) => self.hash_map.insert(
+                key.to_string(),
+                MemoryValue {
+                    value,
+                    updated_at: current.updated_at,
+                },
+            ),
+            None => self.hash_map.insert(
+                key.to_string(),
+                MemoryValue {
+                    value,
+                    updated_at: current_unix.try_into().unwrap(),
+                },
+            ),
+        };
+
         return Ok(());
     }
 }

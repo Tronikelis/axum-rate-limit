@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 mod custom_middleware;
 use custom_middleware::{
     main::{Options, RateLimiter},
-    stores::RedisStore,
+    stores::{MemoryStore, RedisStore},
 };
 
 async fn root() -> &'static str {
@@ -14,9 +14,17 @@ async fn root() -> &'static str {
 
 #[tokio::main]
 async fn main() {
+    let rate_limiter_options = Options {
+        max: 10,
+        per_min: 1,
+    };
+
     let rate_limiter = RateLimiter::new(
-        Options { max: 10 },
-        RedisStore::new(redis::Client::open("redis://127.0.0.1/").unwrap()),
+        rate_limiter_options.clone(),
+        RedisStore::new(
+            redis::Client::open("redis://127.0.0.1").unwrap(),
+            rate_limiter_options,
+        ),
     );
 
     // build our application with a route
