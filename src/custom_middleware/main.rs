@@ -1,19 +1,14 @@
-use std::{collections::HashMap, sync::Arc};
-
-use tokio::sync::RwLock;
-
 use axum::{
     extract::State,
     http::{Request, StatusCode},
-    middleware::{self, Next},
+    middleware::Next,
     response::{IntoResponse, Response},
-    routing::get,
-    Router,
 };
-
 use axum_client_ip::InsecureClientIp;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
-use super::stores::{MemoryStore, RedisStore, Store};
+use super::stores::Store;
 
 #[derive(Clone)]
 pub struct Options {

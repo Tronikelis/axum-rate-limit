@@ -1,11 +1,6 @@
-use std::collections::HashMap;
-
-use std::sync::Arc;
-
-use redis::{aio::Connection, AsyncCommands, Client, Commands, RedisError};
-
 use async_trait::async_trait;
-use tokio::sync::RwLock;
+use redis::{aio::Connection, AsyncCommands, Client};
+use std::collections::HashMap;
 
 #[derive(Debug)]
 pub struct StoreError {
@@ -33,13 +28,13 @@ impl RedisStore {
     }
 
     async fn get_async_connection(&self) -> Result<Connection, StoreError> {
-        return Ok(self
+        return self
             .client
             .get_async_connection()
             .await
-            .map_err(|err| StoreError {
+            .map_err(|_err| StoreError {
                 msg: "yo".to_string(),
-            })?);
+            });
     }
 }
 
@@ -48,7 +43,7 @@ impl Store for RedisStore {
     async fn get(&self, key: &str) -> Result<Option<usize>, StoreError> {
         let mut connection = self.get_async_connection().await?;
 
-        let value = connection.get(key).await.map_err(|err| StoreError {
+        let value = connection.get(key).await.map_err(|_err| StoreError {
             msg: "yo".to_string(),
         })?;
 
@@ -60,13 +55,16 @@ impl Store for RedisStore {
             self.client
                 .get_async_connection()
                 .await
-                .map_err(|err| StoreError {
+                .map_err(|_err| StoreError {
                     msg: "yo".to_string(),
                 })?;
 
-        connection.set(key, value).await.map_err(|err| StoreError {
-            msg: "yo".to_string(),
-        })?;
+        connection
+            .set(key, value)
+            .await
+            .map_err(|_err| StoreError {
+                msg: "yo".to_string(),
+            })?;
 
         return Ok(());
     }
@@ -76,11 +74,11 @@ impl Store for RedisStore {
             self.client
                 .get_async_connection()
                 .await
-                .map_err(|err| StoreError {
+                .map_err(|_err| StoreError {
                     msg: "yo".to_string(),
                 })?;
 
-        connection.del(key).await.map_err(|err| StoreError {
+        connection.del(key).await.map_err(|_err| StoreError {
             msg: "yo".to_string(),
         })?;
 

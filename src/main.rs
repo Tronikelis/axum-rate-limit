@@ -1,13 +1,11 @@
 #![allow(clippy::needless_return)]
-
-use std::net::SocketAddr;
-
 use axum::{middleware, routing::get, Router};
+use std::net::SocketAddr;
 
 mod custom_middleware;
 use custom_middleware::{
     main::{Options, RateLimiter},
-    stores::{MemoryStore, RedisStore},
+    stores::RedisStore,
 };
 
 async fn root() -> &'static str {
